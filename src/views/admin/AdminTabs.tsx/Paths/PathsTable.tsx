@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
-import dagre from 'dagre';
-import { Box } from '@mui/material';
+import React, { useState } from 'react';
+import { MaterialReactTable, type MRT_ColumnDef } from 'material-react-table';
+import { Box, Chip } from '@mui/material';
 
 interface PathRow {
   currentPath: string;
@@ -12,9 +12,9 @@ interface PathRow {
 
 interface Props {
   data: PathRow[];
-  selectedPath?: string;
+  selectedPath: string;
 }
-
+// background colors for paths
 const pathColors: Record<string, string> = {
   Cardio: '#FFD6E0',
   Dental: '#E0D6FF',
@@ -22,94 +22,142 @@ const pathColors: Record<string, string> = {
   Lab: '#FFE5B4',
 };
 
-export default function PathsGraph({ data, selectedPath }: Props) {
-  const { nodes, edges, graphWidth, graphHeight } = useMemo(() => {
-    const g = new dagre.graphlib.Graph();
-    g.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 100 });
-    g.setDefaultEdgeLabel(() => ({}));
+export default function PathTable({ data, selectedPath }: Props): React.JSX.Element {
+  // const [data] = useState<PathRow[]>([
+  //   { currentPath: 'Cardio', nextPath: ['Dental', 'Pharmacy'], description: 'Heart check', prefix: 'C1', status: 'Active' },
+  //   { currentPath: 'Dental', nextPath: ['Pharmacy'], description: 'Tooth care', prefix: 'D1', status: 'Inactive' },
+  //   { currentPath: 'Lab', nextPath: ['Cardio', 'Dental'], description: 'Lab tests', prefix: 'L1', status: 'Active' },
+  // ]);
 
-    // Add nodes with fixed width/height
-    data.forEach((row) => {
-      g.setNode(row.currentPath, { width: 120, height: 50 });
-    });
+  // flatten data but mark first row to show currentPath
+  const processedData = data.flatMap((row) =>
+    row.nextPath.map((next, index) => ({
+      currentPath: index === 0 ? row.currentPath : '', // only first row shows value
+      nextPath: next,
+      description: row.description,
+      prefix: row.prefix,
+      status: row.status,
+      rowSpan: row.nextPath.length, // number of rows for merged background
+    }))
+  );
 
-    // Add edges for each nextPath
-    data.forEach((row) => {
-      row.nextPath.forEach((next) => {
-        g.setEdge(row.currentPath, next);
-      });
-    });
+  const columns: MRT_ColumnDef<typeof processedData[number]>[] = [
+    {
+      header: 'Current Path',
+      accessorKey: 'currentPath',
+      Cell: ({ cell, row }) => {
+        const value = cell.getValue<string>();
+        if (!value) return null;
 
-    dagre.layout(g);
+        const rowSpan = row.original.rowSpan || 1; // how many rows to cover
 
-    const nodesArr = g.nodes().map((id) => ({
-      id,
-      x: g.node(id).x,
-      y: g.node(id).y,
-      width: g.node(id).width,
-      height: g.node(id).height,
-    }));
-
-    const edgesArr = g.edges().map((e) => {
-      const points = g.edge(e).points;
-      return { from: e.v, to: e.w, points };
-    });
-
-    const graphWidth = g.graph().width + 200; // add some padding
-    const graphHeight = g.graph().height + 100;
-
-    return { nodes: nodesArr, edges: edgesArr, graphWidth, graphHeight };
-  }, [data]);
+        return (
+          <Box
+            sx={{
+              position: 'relative',
+              width: '100%',
+              px: 1,
+              display: 'flex',
+              alignItems: 'center',
+              fontWeight: 500,
+            }}
+          >
+            {/* background stretched across multiple rows */}
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: `calc(${rowSpan * 100}% + ${rowSpan - 1}px)`, // stretch + account for borders
+                backgroundColor: pathColors[value] || '#eee',
+                zIndex: -1,
+              }}
+            />
+            {value}
+          </Box>
+        );
+      },
+      muiTableBodyCellProps: ({ cell }) => ({
+        sx: {
+          padding: 0,
+          borderBottom: 'none', // remove bottom border
+        },
+      }),
+    },
+    {
+      header: 'Next Path',
+      accessorKey: 'nextPath',
+      Cell: ({ cell }) => {
+        const value = cell.getValue<string>();
+        return (
+          <Box
+            sx={{
+              width: '100%',
+              height: '100%',
+              backgroundColor: pathColors[value] || '#eee',
+              px: 1,
+              display: 'flex',
+              alignItems: 'center',
+              fontWeight: 500,
+            }}
+          >
+            {value}
+          </Box>
+        );
+      },
+    },
+    {
+      header: 'Description',
+      accessorKey: 'description',
+    },
+    {
+      header: 'Prefix',
+      accessorKey: 'prefix',
+    },
+    {
+      header: 'Status',
+      accessorKey: 'status',
+      Cell: ({ cell }) => {
+        const status = cell.getValue<'Active' | 'Inactive'>();
+        return (
+          <Chip
+            label={status}
+            sx={{
+              backgroundColor: status === 'Active' ? '#CFFFEF' : '#FFD6D6',
+              color: status === 'Active' ? '#2FDCC7' : '#E53935',
+              fontWeight: 600,
+            }}
+          />
+        );
+      },
+    },
+  ];
 
   return (
-    <Box sx={{ width: '100%', height: '100%', overflow: 'auto' }}>
-      <svg
-        width="100%"
-        height="100%"
-        viewBox={`0 0 ${graphWidth} ${graphHeight}`}
-      >
-        {/* Draw edges */}
-        {edges.map((e, i) => (
-          <polyline
-            key={i}
-            points={e.points.map((p) => `${p.x},${p.y}`).join(' ')}
-            fill="none"
-            stroke="#aaa"
-            strokeWidth={2}
-          />
-        ))}
-
-        {/* Draw nodes */}
-        {nodes.map((n) => {
-          const isSelected = n.id === selectedPath;
-          return (
-            <g
-              key={n.id}
-              transform={`translate(${n.x - n.width / 2}, ${n.y - n.height / 2})`}
-            >
-              <rect
-                width={n.width}
-                height={n.height}
-                rx={10}
-                ry={10}
-                fill={isSelected ? '#FFD700' : pathColors[n.id] || '#eee'}
-                stroke="#333"
-                strokeWidth={1.5}
-              />
-              <text
-                x={n.width / 2}
-                y={n.height / 2}
-                textAnchor="middle"
-                alignmentBaseline="central"
-                fontWeight="bold"
-                fontSize={14}
-              >
-                {n.id}
-              </text>
-            </g>
-          );
+    <Box sx={{ p: 2, backgroundColor: '#f4f4f4', borderRadius: 2 }}>
+      <MaterialReactTable
+        columns={columns}
+        data={processedData}
+        enableColumnActions={false}
+        enableDensityToggle={false}
+        enableFullScreenToggle={false}
+        enableHiding={false}
+        enableSorting
+        enablePagination
+        enableRowActions={false}
+        enableGlobalFilter={false}
+        muiTablePaperProps={{
+          sx: { borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
+        }}
+        muiTableBodyRowProps={({ row }) => ({
+          sx: {
+            '&:not(:first-of-type) td:first-of-type': {
+              borderTop: 0, // remove top border for merged rows
+            },
+          },
         })}
-      </svg>
+      />
     </Box>
   );
 }

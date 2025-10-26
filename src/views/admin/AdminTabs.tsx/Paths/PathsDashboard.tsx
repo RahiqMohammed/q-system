@@ -41,6 +41,11 @@ export default function PathsDashboard() {
     { icon: <TableChartIcon /> },
   ];
 
+  const handlePathChange = (value: string) => {
+    setSelectedPath(value);
+    if (!value) setTabValue(1); // 👈 Switch to table when unselected
+  };
+
   return (
     <Box sx={{ width: '100%' }}>
       {/* Select box */}
@@ -48,7 +53,7 @@ export default function PathsDashboard() {
         <Select
           value={selectedPath}
           displayEmpty
-          onChange={(e) => setSelectedPath(e.target.value)}
+          onChange={(e) => handlePathChange(e.target.value)}
           sx={{
             textAlign: 'left',
             backgroundColor: '#f4f4f4',
@@ -60,8 +65,8 @@ export default function PathsDashboard() {
             PaperProps: { sx: { textAlign: 'left' } },
           }}
         >
-          <MenuItem value="" disabled>
-            Current Path
+          <MenuItem value="">
+            <em>All Paths</em> {/* 👈 Now clickable to unselect */}
           </MenuItem>
           {options.map((option) => (
             <MenuItem key={option} value={option}>
@@ -136,8 +141,12 @@ export default function PathsDashboard() {
           borderRadius: '0 2 2 2',
         }}
       >
-        {tabValue === 0 && <PathsGraph data={filteredData} selectedPath={selectedPath} />}
-        {tabValue === 1 && <PathTable data={filteredData} selectedPath={selectedPath} />}
+        {tabValue === 0 && (
+          <PathsGraph data={filteredData} selectedPath={selectedPath} />
+        )}
+        {tabValue === 1 && (
+          <PathTable data={filteredData} selectedPath={selectedPath} />
+        )}
       </Box>
     </Box>
   );
