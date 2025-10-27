@@ -1,5 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import UserQueue from './views/User/userViewComponents/UserQueue';
 
 // Lazy-loaded pages
 const FlowTemprory = lazy(() => import('./views/FlowTemprory'));
@@ -14,6 +15,7 @@ export default function AppRoutes() {
           <Route path="/" element={<FlowTemprory />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/user" element={<UserDashboard />} />
+          <Route path="/user/:counter" element={<UserQueue />} />
           {/* <Route path="*" element={<div>Page Not Found</div>} /> */}
         </Routes>
       </Suspense>
