@@ -132,11 +132,11 @@ export default function PathsDashboard() {
       {/* Panels */}
       <Box
         sx={{
-          mt: 2,
+          // mt: 2,
           p: 2,
           backgroundColor: '#f4f4f4',
           height: '570px',
-          borderRadius: 2,
+borderRadius: "8px 0 8px 8px"
         }}
       >
         {tabValue === 0 && (

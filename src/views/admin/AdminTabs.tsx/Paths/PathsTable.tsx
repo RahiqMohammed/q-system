@@ -17,7 +17,7 @@ interface PathRow {
   currentPath: string;
   nextPath: string[];
   description: string;
-  prefix: string;
+  // prefix: string;
   status: 'Active' | 'Inactive';
 }
 
@@ -52,7 +52,7 @@ export default function PathTable({
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editNext, setEditNext] = useState<string>('');
   const [editDescription, setEditDescription] = useState<string>('');
-  const [editPrefix, setEditPrefix] = useState<string>('');
+  // const [editPrefix, setEditPrefix] = useState<string>('');
   const [editStatus, setEditStatus] = useState<'Active' | 'Inactive'>('Active');
 
   // Flatten tableData for display
@@ -66,7 +66,7 @@ export default function PathTable({
         currentPath: idx === 0 ? r.currentPath : '',
         nextPath: n,
         description: r.description,
-        prefix: r.prefix,
+        // prefix: r.prefix,
         status: r.status,
         ownerRow: r,
       }))
@@ -105,7 +105,7 @@ export default function PathTable({
     setEditingKey(newKey);
     setEditNext(nextOptionsForOwner(selectedPath)[0] || '');
     setEditDescription(ownerRow.description);
-    setEditPrefix(ownerRow.prefix);
+    // setEditPrefix(ownerRow.prefix);
     setEditStatus(ownerRow.status);
   };
 
@@ -126,7 +126,7 @@ export default function PathTable({
         ...r,
         nextPath: next,
         description: editDescription,
-        prefix: editPrefix,
+        // prefix: editPrefix,
         status: editStatus,
       };
     });
@@ -135,7 +135,7 @@ export default function PathTable({
     setEditingKey(null);
     setEditNext('');
     setEditDescription('');
-    setEditPrefix('');
+    // setEditPrefix('');
     setEditStatus('Active');
   };
 
@@ -154,7 +154,7 @@ export default function PathTable({
     setEditingKey(null);
     setEditNext('');
     setEditDescription('');
-    setEditPrefix('');
+    // setEditPrefix('');
     setEditStatus('Active');
   };
 
@@ -253,21 +253,21 @@ export default function PathTable({
           cell.getValue<string>()
         ),
     },
-    {
-      header: 'Prefix',
-      accessorKey: 'prefix',
-      Cell: ({ row, cell }) =>
-        editingKey === row.original._rowKey ? (
-          <TextField
-            value={editPrefix}
-            onChange={(e) => setEditPrefix(e.target.value)}
-            size="small"
-            fullWidth
-          />
-        ) : (
-          cell.getValue<string>()
-        ),
-    },
+    // {
+    //   header: 'Prefix',
+    //   accessorKey: 'prefix',
+    //   Cell: ({ row, cell }) =>
+    //     editingKey === row.original._rowKey ? (
+    //       <TextField
+    //         value={editPrefix}
+    //         onChange={(e) => setEditPrefix(e.target.value)}
+    //         size="small"
+    //         fullWidth
+    //       />
+    //     ) : (
+    //       cell.getValue<string>()
+    //     ),
+    // },
     {
       header: 'Status',
       accessorKey: 'status',
