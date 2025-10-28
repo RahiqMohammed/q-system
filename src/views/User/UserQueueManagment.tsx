@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {
   FormControl,
   Select,
@@ -7,8 +7,12 @@ import {
   Button,
   Typography,
 } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 
 export default function UserQueueManagment() {
+    const navigate = useNavigate();
+    const [counter, setCounter] = useState('');
+
   return (
     <Box
       sx={{
@@ -57,37 +61,39 @@ export default function UserQueueManagment() {
           mb: '1rem',
         }}
       >
-        <FormControl sx={{ width: '90%' }} variant="outlined">
-          <Select
-            displayEmpty
-            sx={{
-              textAlign: 'left',
-              backgroundColor: '#ffffff',
-              border: 'none',
-              '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
-              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                border: 'none',
-              },
-            }}
-            MenuProps={{
-              PaperProps: { sx: { textAlign: 'left' } },
-            }}
-          >
-            <MenuItem value="">
-              <em>Select a Counter</em>
-            </MenuItem>
-
-            <MenuItem value="R1">Radiology - Room 1</MenuItem>
-            <MenuItem value="R2">Radiology - Room 2</MenuItem>
-            <MenuItem value="P1">Pharmacy - Window 1</MenuItem>
-            <MenuItem value="P2">Pharmacy - Window 2</MenuItem>
-            <MenuItem value="B1">Billing - Counter 1</MenuItem>
-            <MenuItem value="B2">Billing - Counter 2</MenuItem>
-            <MenuItem value="L1">Laboratory - Sample Desk</MenuItem>
-            <MenuItem value="ER1">Emergency - Check-in Desk</MenuItem>
-            <MenuItem value="OP1">Outpatient - Reception</MenuItem>
-          </Select>
-        </FormControl>
+       <FormControl sx={{ width: '90%' }} variant="outlined">
+      <Select
+        displayEmpty
+        value={counter}
+        onChange={(e) => setCounter(e.target.value)}
+        sx={{
+          textAlign: 'left',
+          backgroundColor: '#ffffff',
+          border: 'none',
+          '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { border: 'none' },
+        }}
+        MenuProps={{
+          PaperProps: { sx: { textAlign: 'left' } },
+        }}
+        renderValue={(selected) => {
+          if (selected === '') {
+            return <em>Select a Counter</em>;
+          }
+          return selected;
+        }}
+      >
+        <MenuItem value="Radiology - Room 1">Radiology - Room 1</MenuItem>
+        <MenuItem value="Radiology - Room 2">Radiology - Room 2</MenuItem>
+        <MenuItem value="Pharmacy - Window 1">Pharmacy - Window 1</MenuItem>
+        <MenuItem value="Pharmacy - Window 2">Pharmacy - Window 2</MenuItem>
+        <MenuItem value="Billing - Counter 1">Billing - Counter 1</MenuItem>
+        <MenuItem value="Billing - Counter 2">Billing - Counter 2</MenuItem>
+        <MenuItem value="Laboratory - Sample Desk">Laboratory - Sample Desk</MenuItem>
+        <MenuItem value="Emergency - Check-in Desk">Emergency - Check-in Desk</MenuItem>
+        <MenuItem value="Outpatient - Reception">Outpatient - Reception</MenuItem>
+      </Select>
+    </FormControl>
       </Box>
 
       {/* Continue Button */}
@@ -104,6 +110,7 @@ export default function UserQueueManagment() {
             backgroundColor: '#28CBB6',
           },
         }}
+        onClick={()=> navigate('/user/:counter')}
       >
         Continue
       </Button>
