@@ -6,6 +6,8 @@ import UserQueue from './views/User/userViewComponents/UserQueue';
 const FlowTemprory = lazy(() => import('./views/FlowTemprory'));
 const AdminDashboard = lazy(() => import('./views/admin/QueueRouteManagement'));
 const UserDashboard = lazy(() => import('./views/User/UserQueueManagment')); // adjust path if needed
+const QueueTV = lazy(() => import('./views/tv/QueueTV')); // adjust path if needed
+const TVQueue = lazy(() => import('./views/tv/TVQueue')); // adjust path if needed
 
 export default function AppRoutes() {
   return (
@@ -16,6 +18,9 @@ export default function AppRoutes() {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/user" element={<UserDashboard />} />
           <Route path="/user/:counter" element={<UserQueue />} />
+          <Route path="/tv" element={<TVQueue />} />
+          <Route path='/tv/tv-screen' element={<QueueTV />} />
+
           {/* <Route path="*" element={<div>Page Not Found</div>} /> */}
         </Routes>
       </Suspense>
