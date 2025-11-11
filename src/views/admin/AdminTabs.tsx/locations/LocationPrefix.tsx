@@ -22,45 +22,25 @@ import {
 } from '@mui/icons-material';
 
 interface LocationRow {
-  name: string;
   department: string;
   clinic: string;
   prefix: string;
   status: 'Active' | 'Inactive';
 }
 
-const locationOptions = ['X-Ray', 'Cardio', 'Dentistry', 'Lab'];
 const departmentOptions = ['Radiology', 'Cardiology', 'Dentistry'];
 const clinicOptions = ['Main Clinic', 'Branch Clinic', 'First Aid'];
 
-export default function MainLocations(): React.JSX.Element {
+export default function LocationPrefix(): React.JSX.Element {
   const [data, setData] = useState<LocationRow[]>([
-    { name: 'X-Ray', department: 'Radiology', clinic: 'Main Clinic', prefix: 'XR', status: 'Active' },
-    { name: 'Cardio', department: 'Cardiology', clinic: 'Branch Clinic', prefix: 'CR', status: 'Inactive' },
+    {  department: 'Radiology', clinic: 'Main Clinic', prefix: 'XR', status: 'Active' },
+    {  department: 'Cardiology', clinic: 'Branch Clinic', prefix: 'CR', status: 'Inactive' },
   ]);
 
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [editRowData, setEditRowData] = useState<Partial<LocationRow>>({});
 
   const columns: MRT_ColumnDef<LocationRow>[] = [
-    {
-      header: 'Name',
-      accessorKey: 'name',
-      Cell: ({ row }) => (
-        <TextField
-          select
-          variant="standard"
-          value={editingRow === row.index ? editRowData.name ?? '' : row.original.name}
-          disabled={editingRow !== row.index}
-          onChange={(e) => setEditRowData((prev) => ({ ...prev, name: e.target.value }))}
-          sx={{ select: { color: '#1C1C1C' } }}
-        >
-          {locationOptions.map((loc) => (
-            <MenuItem key={loc} value={loc}>{loc}</MenuItem>
-          ))}
-        </TextField>
-      ),
-    },
     {
       header: 'Department',
       accessorKey: 'department',
@@ -152,7 +132,7 @@ export default function MainLocations(): React.JSX.Element {
 
               <IconButton
                 onClick={() => {
-                  if (!editRowData.name && !editRowData.department && !editRowData.clinic && !editRowData.prefix) {
+                  if ( !editRowData.department && !editRowData.clinic && !editRowData.prefix) {
                     setData((prev) => prev.slice(0, -1));
                   }
                   setEditingRow(null);
@@ -237,7 +217,6 @@ export default function MainLocations(): React.JSX.Element {
               <IconButton
                 onClick={() => {
                   const newRow: LocationRow = {
-                    name: '',
                     department: '',
                     clinic: '',
                     prefix: '',

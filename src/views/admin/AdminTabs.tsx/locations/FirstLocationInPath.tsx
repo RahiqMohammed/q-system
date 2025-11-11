@@ -20,7 +20,6 @@ import {
 } from 'material-react-table';
 
 interface LocationRow {
-  name: string;
   department: string;
   clinic: string;
   prefix: string;
@@ -28,34 +27,18 @@ interface LocationRow {
 }
 
 const locationOptions = ['X-Ray', 'Cardio', 'Dentistry', 'Lab'];
-const departmentOptions = ['Radiology', 'Cardiology', 'Dentistry'];
-const clinicOptions = ['Main Clinic', 'Branch Clinic', 'First Aid'];
+
 
 export default function FirstLocationInPath(): React.JSX.Element {
   const [data, setData] = useState<LocationRow[]>([
-    { name: 'X-Ray', department: 'Radiology', clinic: 'Main Clinic', prefix: 'XR', firstLocationInPath: '' },
-    { name: 'Cardio', department: 'Cardiology', clinic: 'Branch Clinic', prefix: 'CR', firstLocationInPath: '' },
+    {  department: 'Radiology', clinic: 'Main Clinic', prefix: 'XR', firstLocationInPath: '' },
+    { department: 'Cardiology', clinic: 'Branch Clinic', prefix: 'CR', firstLocationInPath: '' },
   ]);
 
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [editRowData, setEditRowData] = useState<Partial<LocationRow>>({});
 
   const columns: MRT_ColumnDef<LocationRow>[] = [
-    {
-      header: 'Name',
-      accessorKey: 'name',
-      Cell: ({ row }) => (
-        <TextField
-          select
-          variant="standard"
-          value={row.original.name}
-          disabled
-          sx={{ select: { color: '#1C1C1C' } }}
-        >
-          <MenuItem value={row.original.name}>{row.original.name}</MenuItem>
-        </TextField>
-      ),
-    },
     {
       header: 'Department',
       accessorKey: 'department',
@@ -102,9 +85,7 @@ export default function FirstLocationInPath(): React.JSX.Element {
       header: 'First Location in Path',
       accessorKey: 'firstLocationInPath',
       Cell: ({ row }) => {
-        const availableLocations = locationOptions.filter(
-          (loc) => loc !== row.original.name
-        );
+        const availableLocations = locationOptions
         return (
           <TextField
             select
