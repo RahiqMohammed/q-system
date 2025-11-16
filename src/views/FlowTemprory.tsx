@@ -5,6 +5,7 @@ import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import PersonIcon from '@mui/icons-material/Person';
 import TvIcon from '@mui/icons-material/Tv';
 import { useNavigate } from 'react-router-dom';
+import axios from "axios";
 
 interface Flow {
   role: string;
@@ -37,7 +38,34 @@ const userFlows: Flow[] = [
 const FlowTemprory: FC = () => {
   const navigate = useNavigate();
 
-  const handleClick = (role: string) => {
+  // 🔥 Login API added here
+const login = async () => {
+  try {
+    const response = await axios.post(
+      "http://localhost:8099/qsys/auth/login",
+      null,
+      {
+        params: {
+          persCode: "-1001",
+          deptId: "1",
+        },
+      }
+    );
+
+    localStorage.setItem("token", response.data.token);
+    return response.data.token;
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
+    return null;
+  }
+};
+
+
+  // 🔥 Updated to call login first before navigating
+  const handleClick = async (role: string) => {
+    const token = await login();
+    if (!token) return;
+
     if (role === 'Admin') navigate('/admin');
     else if (role === 'User') navigate('/user');
     else if (role === 'TV') navigate('/tv');
@@ -46,13 +74,12 @@ const FlowTemprory: FC = () => {
   return (
     <Box
       sx={{
-         p: 4,
-       height: '100vh',
+        p: 4,
+        height: '100vh',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        
       }}
     >
       {/* Top row: Admin and User */}
@@ -138,7 +165,7 @@ const FlowTemprory: FC = () => {
                 }}
                 onClick={() => handleClick(userFlows[2].role)}
               >
-                {userFlows[2].buttonText} {/* FIXED: use userFlows[2] instead of flow */}
+                {userFlows[2].buttonText}
               </Button>
             </Card>
           </motion.div>

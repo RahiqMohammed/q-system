@@ -21,12 +21,23 @@ import {
 } from "@mui/icons-material";
 import axios from "axios";
 
+interface Department {
+  name: string;
+  code: number;
+}
+
+interface Clinic {
+  name: string;
+  code: number;
+}
+
 interface LocationRow {
   name: string;
   department: string;
   clinic: string;
   counters: string[];
   status: "Active" | "Inactive";
+  clinics?: Clinic[];
 }
 
 const departmentColors: Record<string, string> = {
@@ -35,24 +46,29 @@ const departmentColors: Record<string, string> = {
   Dentistry: "#D6F0FF",
 };
 
+const AUTH_TOKEN =
+  "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjpbIk1BTkFHRU1FTlQiLCJVU0VSIl0sInN1YiI6Ii0xMDAxIiwiaWF0IjoxNzYyOTQxNzAxLCJleHAiOjE3NjMwMjgxMDF9.-olNaUnpOaN3hUq4sir4QSqs925Dr8eKAW4LPSGmIjc";
+
 export default function AllLocations(): React.JSX.Element {
   const [data, setData] = useState<LocationRow[]>([]);
-  const [departments, setDepartments] = useState<string[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [editRowData, setEditRowData] = useState<Partial<LocationRow>>({});
   const [newCounter, setNewCounter] = useState("");
 
-  // Fetch departments from API
+  // Fetch departments
   useEffect(() => {
     const fetchDepartments = async () => {
       try {
-        const token = `Bearer ${localStorage.getItem("token") || "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjpbIk1BTkFHRU1FTlQiLCJVU0VSIl0sInN1YiI6Ii0xMDAxIiwiaWF0IjoxNzYyODU1NjA1LCJleHAiOjE3NjI5NDIwMDV9.NQnGY7o7q1ryMqaW0xMM7Hf0F1tjcQMdzuK6QCpsN5E"}`;
         const res = await axios.get(
           "http://localhost:8099/qsys/api/masters/master-dept-list",
-          { headers: { Authorization: token } }
+          { headers: { Authorization: AUTH_TOKEN } }
         );
-        const names = res.data.map((dep: any) => dep.name || dep.departmentName);
-        setDepartments(names);
+        const deptArray = res.data.result.map((dep: any) => ({
+          name: dep.deptName,
+          code: dep.deptCode,
+        }));
+        setDepartments(deptArray);
       } catch (err) {
         console.error("Failed to fetch departments:", err);
       }
@@ -60,23 +76,23 @@ export default function AllLocations(): React.JSX.Element {
     fetchDepartments();
   }, []);
 
-  // Fetch locations data from API
+  // Fetch locations
   useEffect(() => {
     const fetchLocations = async () => {
       try {
-        const token = `Bearer ${localStorage.getItem("token") || "YOUR_LOCAL_JWT_TOKEN"}`;
         const res = await axios.get(
-          "http://localhost:8099/qsys/api/masters/master-locations-list", // change to your locations API
-          { headers: { Authorization: token } }
+          "http://localhost:8099/qsys/api/masters/master-locations-list",
+          { headers: { Authorization: AUTH_TOKEN } }
         );
-        // Map your API data to LocationRow interface
-        const locations: LocationRow[] = res.data.map((loc: any) => ({
-          name: loc.name,
-          department: loc.department,
-          clinic: loc.clinic,
-          counters: loc.counters || [],
-          status: loc.status === "Active" ? "Active" : "Inactive",
-        }));
+        const locations: LocationRow[] =
+          res.data.result?.map((loc: any) => ({
+            name: loc.name,
+            department: loc.department,
+            clinic: loc.clinic,
+            counters: loc.counters || [],
+            status: loc.status === "Active" ? "Active" : "Inactive",
+            clinics: [],
+          })) || [];
         setData(locations);
       } catch (err) {
         console.error("Failed to fetch locations:", err);
@@ -84,6 +100,30 @@ export default function AllLocations(): React.JSX.Element {
     };
     fetchLocations();
   }, []);
+
+  // Fetch clinics based on department
+  useEffect(() => {
+    const fetchClinics = async () => {
+      if (!editRowData.department) return;
+      try {
+        const dep = departments.find((d) => d.name === editRowData.department);
+        if (!dep) return;
+
+        const res = await axios.get(
+          `http://localhost:8099/qsys/api/masters/master-clinic-list?depId=${dep.code}`,
+          { headers: { Authorization: AUTH_TOKEN } }
+        );
+        const clinicArray = res.data.result.map((c: any) => ({
+          name: c.clinicName,
+          code: c.clinicCode,
+        }));
+        setEditRowData((prev) => ({ ...prev, clinics: clinicArray }));
+      } catch (err) {
+        console.error("Failed to fetch clinics:", err);
+      }
+    };
+    fetchClinics();
+  }, [editRowData.department, departments]);
 
   const columns: MRT_ColumnDef<LocationRow>[] = [
     {
@@ -115,13 +155,17 @@ export default function AllLocations(): React.JSX.Element {
           }
           disabled={editingRow !== row.index}
           onChange={(e) =>
-            setEditRowData((prev) => ({ ...prev, department: e.target.value }))
+            setEditRowData((prev) => ({
+              ...prev,
+              department: e.target.value,
+              clinic: "",
+            }))
           }
           sx={{ select: { color: "#1C1C1C" } }}
         >
           {departments.map((dep) => (
-            <MenuItem key={dep} value={dep}>
-              {dep}
+            <MenuItem key={dep.code} value={dep.name}>
+              {dep.name}
             </MenuItem>
           ))}
         </TextField>
@@ -143,9 +187,9 @@ export default function AllLocations(): React.JSX.Element {
           }
           sx={{ select: { color: "#1C1C1C" } }}
         >
-          {["Main Clinic", "Branch Clinic", "First Aid"].map((clinic) => (
-            <MenuItem key={clinic} value={clinic}>
-              {clinic}
+          {(editingRow === row.index ? editRowData.clinics ?? [] : []).map((clinic) => (
+            <MenuItem key={clinic.code} value={clinic.name}>
+              {clinic.name}
             </MenuItem>
           ))}
         </TextField>
@@ -159,7 +203,9 @@ export default function AllLocations(): React.JSX.Element {
         const counters =
           editingRow === rowIndex ? editRowData.counters ?? [] : cell.getValue<string[]>();
         const department =
-          editingRow === rowIndex ? editRowData.department ?? "Radiology" : data[rowIndex].department;
+          editingRow === rowIndex
+            ? editRowData.department ?? "Radiology"
+            : data[rowIndex].department;
         const color = departmentColors[department] ?? "#eee";
 
         return (
@@ -246,7 +292,7 @@ export default function AllLocations(): React.JSX.Element {
                   setEditingRow(null);
                   setEditRowData({});
                 }}
-                sx={{ color: "#667085", "&:hover": { shadow: 0.5 } }}
+                sx={{ color: "#667085" }}
               >
                 <Save />
               </IconButton>
@@ -264,7 +310,7 @@ export default function AllLocations(): React.JSX.Element {
                   setEditingRow(null);
                   setEditRowData({});
                 }}
-                sx={{ color: "#667085", "&:hover": { shadow: 0.5 } }}
+                sx={{ color: "#667085" }}
               >
                 <Close />
               </IconButton>
@@ -278,7 +324,7 @@ export default function AllLocations(): React.JSX.Element {
               <IconButton
                 onClick={() => {
                   setEditingRow(rowIndex);
-                  setEditRowData({ ...data[rowIndex] });
+                  setEditRowData({ ...data[rowIndex], clinics: [] });
                 }}
                 sx={{ color: "#2FDCC7" }}
               >
@@ -330,44 +376,49 @@ export default function AllLocations(): React.JSX.Element {
         muiTablePaperProps={{
           sx: { borderRadius: 3, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" },
         }}
-        renderTopToolbarCustomActions={() => (
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "flex-end",
-              padding: 1,
-              alignItems: "center",
-              gap: 0.5,
-            }}
-          >
-            <Tooltip title="Add Row">
-              <IconButton
-                onClick={() => {
+         renderTopToolbarCustomActions={() => (
+                    <Box
+                            sx={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    padding: 1,
+                    alignItems: 'center',
+                    gap: 0.5,
+                    height: '100%',      // fill parent's height
+                    flexGrow: 1,         // grow to fill available horizontal space
+                  }}
+                          >
+                  <Tooltip title="Add Row">
+                    <IconButton
+                    onClick={() => {
                   const newRow: LocationRow = {
                     name: "",
                     department: "",
                     clinic: "",
                     counters: [],
                     status: "Active",
+                    clinics: [],
                   };
                   setData((prev) => [...prev, newRow]);
                   setEditingRow(data.length);
                   setEditRowData(newRow);
                 }}
-                sx={{
-                  borderRadius: 1,
-                  width: "1em",
-                  height: "1em",
-                  backgroundColor: "#667085",
-                  color: "#fff",
-                  "&:hover": { backgroundColor: "#50566a" },
-                }}
-              >
-                <Add />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        )}
+                        sx={{
+                          borderRadius: 1,
+                          width: "1em",
+                          height: "1em",
+                       
+                       
+                          backgroundColor: '#667085',
+                          color: '#fff',
+                          '&:hover': { backgroundColor: '#50566a' },
+                        }}
+                    >
+                      <Add />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              )}
       />
     </Box>
   );
