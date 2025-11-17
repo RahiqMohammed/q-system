@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   MaterialReactTable,
   type MRT_ColumnDef,
@@ -11,14 +11,7 @@ import {
   MenuItem,
   Tooltip,
 } from "@mui/material";
-import {
-  Edit,
-  Add,
-  LocationOn,
-  LocationOff,
-  Close,
-  Save,
-} from "@mui/icons-material";
+import { Edit, Add, Close, Save, LocationOn, LocationOff } from "@mui/icons-material";
 import axios from "axios";
 
 interface Department {
@@ -31,99 +24,147 @@ interface Clinic {
   code: number;
 }
 
+interface Location {
+  locationId?: number;
+  locationName: string;
+  locationNameAr: string;
+  activeYN: string;
+  gender: string;
+}
+
 interface LocationRow {
   name: string;
   department: string;
   clinic: string;
-  counters: string[];
   status: "Active" | "Inactive";
   clinics?: Clinic[];
+  deptCode?: number;
+  clinicCode?: number;
+  pathId?: number;
+  locations?: Location[];
 }
-
-const departmentColors: Record<string, string> = {
-  Radiology: "#FFD6E0",
-  Cardiology: "#E0D6FF",
-  Dentistry: "#D6F0FF",
-};
-
-const AUTH_TOKEN =
-  "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjpbIk1BTkFHRU1FTlQiLCJVU0VSIl0sInN1YiI6Ii0xMDAxIiwiaWF0IjoxNzYyOTQxNzAxLCJleHAiOjE3NjMwMjgxMDF9.-olNaUnpOaN3hUq4sir4QSqs925Dr8eKAW4LPSGmIjc";
 
 export default function AllLocations(): React.JSX.Element {
   const [data, setData] = useState<LocationRow[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [editRowData, setEditRowData] = useState<Partial<LocationRow>>({});
-  const [newCounter, setNewCounter] = useState("");
+  const tableRef = useRef<any>(null);
+  const token = localStorage.getItem("token");
 
-  // Fetch departments
   useEffect(() => {
-    const fetchDepartments = async () => {
+    const fetchData = async () => {
       try {
-        const res = await axios.get(
-          "http://localhost:8099/qsys/api/masters/master-dept-list",
-          { headers: { Authorization: AUTH_TOKEN } }
-        );
-        const deptArray = res.data.result.map((dep: any) => ({
-          name: dep.deptName,
-          code: dep.deptCode,
-        }));
-        setDepartments(deptArray);
+        const [deptRes, clinicRes, pathRes] = await Promise.all([
+          axios.get("http://localhost:8099/qsys/api/masters/master-dept-list", { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get("http://localhost:8099/qsys/api/masters/master-clinic-list", { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get("http://localhost:8099/qsys/api/masters/master-path/get", { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+
+        const departments: Department[] = deptRes.data.result.map((d: any) => ({ name: d.deptName, code: d.deptCode }));
+        const clinics: Clinic[] = clinicRes.data.result.map((c: any) => ({ name: c.clinicName, code: c.clinicCode }));
+
+        const paths = pathRes.data.result;
+        const mappedData: LocationRow[] = paths.map((path: any) => {
+          const dept = departments.find(d => d.code === path.dept);
+          const clinic = clinics.find(c => c.code === path.clinic);
+          return {
+            name: path.pathName,
+            department: dept ? dept.name : "—",
+            clinic: clinic ? clinic.name : "—",
+            status: path.activeYn === "Y" ? "Active" : "Inactive",
+            clinics,
+            deptCode: path.dept,
+            clinicCode: path.clinic,
+            pathId: path.pathId,
+            locations: path.locations ?? [],
+          };
+        });
+
+        setData(mappedData);
+        setDepartments(departments);
       } catch (err) {
-        console.error("Failed to fetch departments:", err);
+        console.error(err);
       }
     };
-    fetchDepartments();
-  }, []);
 
-  // Fetch locations
-  useEffect(() => {
-    const fetchLocations = async () => {
-      try {
-        const res = await axios.get(
-          "http://localhost:8099/qsys/api/masters/master-locations-list",
-          { headers: { Authorization: AUTH_TOKEN } }
+    fetchData();
+  }, [token]);
+
+  const saveRow = async (rowIndex: number) => {
+    const row = editingRow !== null ? editRowData : data[rowIndex];
+    if (!row?.name || !row?.department || !row?.clinic) return;
+
+    try {
+      const dept = departments.find(d => d.name === row.department);
+      const clinic = row.clinics?.find(c => c.name === row.clinic);
+
+      let pathId = row.pathId;
+
+      if (!pathId) {
+        // New row: save first to get pathId
+        const res = await axios.post(
+          "http://localhost:8099/qsys/api/masters/master-path/save",
+          {
+            pathName: row.name,
+            pathNameAr: row.name,
+            dept: dept?.code,
+            clinic: clinic?.code,
+            activeYn: "Y",
+            locations: row.locations ?? [],
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
         );
-        const locations: LocationRow[] =
-          res.data.result?.map((loc: any) => ({
-            name: loc.name,
-            department: loc.department,
-            clinic: loc.clinic,
-            counters: loc.counters || [],
-            status: loc.status === "Active" ? "Active" : "Inactive",
-            clinics: [],
-          })) || [];
-        setData(locations);
-      } catch (err) {
-        console.error("Failed to fetch locations:", err);
+        pathId = res.data.result?.pathId;
       }
-    };
-    fetchLocations();
-  }, []);
 
-  // Fetch clinics based on department
-  useEffect(() => {
-    const fetchClinics = async () => {
-      if (!editRowData.department) return;
-      try {
-        const dep = departments.find((d) => d.name === editRowData.department);
-        if (!dep) return;
+      // Update entire row
+      await axios.post(
+        "http://localhost:8099/qsys/api/masters/master-path/update",
+        {
+          pathId,
+          pathName: row.name,
+          pathNameAr: row.name,
+          dept: dept?.code,
+          clinic: clinic?.code,
+          activeYn: row.status === "Active" ? "Y" : "N",
+          locations: row.locations ?? [],
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-        const res = await axios.get(
-          `http://localhost:8099/qsys/api/masters/master-clinic-list?depId=${dep.code}`,
-          { headers: { Authorization: AUTH_TOKEN } }
-        );
-        const clinicArray = res.data.result.map((c: any) => ({
-          name: c.clinicName,
-          code: c.clinicCode,
-        }));
-        setEditRowData((prev) => ({ ...prev, clinics: clinicArray }));
-      } catch (err) {
-        console.error("Failed to fetch clinics:", err);
-      }
-    };
-    fetchClinics();
-  }, [editRowData.department, departments]);
+      const updatedRow: LocationRow = {
+        ...row,
+        deptCode: dept?.code,
+        clinicCode: clinic?.code,
+        pathId,
+      } as LocationRow;
+
+      setData(prev => {
+        const newData = [...prev];
+        if (editingRow !== null) {
+          newData[editingRow] = updatedRow;
+        } else {
+          newData.push(updatedRow);
+        }
+        return newData;
+      });
+
+      setEditingRow(null);
+      setEditRowData({});
+    } catch (err) {
+      console.error("Failed to save row", err);
+    }
+  };
+
+  const toggleStatus = (rowIndex: number) => {
+    setData(prev =>
+      prev.map((r, i) =>
+        i === rowIndex ? { ...r, status: r.status === "Active" ? "Inactive" : "Active" } : r
+      )
+    );
+    saveRow(rowIndex); // call API to update entire row
+  };
 
   const columns: MRT_ColumnDef<LocationRow>[] = [
     {
@@ -132,13 +173,9 @@ export default function AllLocations(): React.JSX.Element {
       Cell: ({ cell, row }) => (
         <TextField
           variant="standard"
-          value={
-            editingRow === row.index ? editRowData.name ?? "" : cell.getValue<string>()
-          }
+          value={editingRow === row.index ? editRowData.name ?? "" : cell.getValue<string>()}
           disabled={editingRow !== row.index}
-          onChange={(e) =>
-            setEditRowData((prev) => ({ ...prev, name: e.target.value }))
-          }
+          onChange={e => setEditRowData(prev => ({ ...prev, name: e.target.value }))}
           sx={{ input: { color: "#1C1C1C" } }}
         />
       ),
@@ -150,24 +187,12 @@ export default function AllLocations(): React.JSX.Element {
         <TextField
           select
           variant="standard"
-          value={
-            editingRow === row.index ? editRowData.department ?? "" : cell.getValue<string>()
-          }
+          value={editingRow === row.index ? editRowData.department ?? "" : cell.getValue<string>()}
           disabled={editingRow !== row.index}
-          onChange={(e) =>
-            setEditRowData((prev) => ({
-              ...prev,
-              department: e.target.value,
-              clinic: "",
-            }))
-          }
+          onChange={e => setEditRowData(prev => ({ ...prev, department: e.target.value, clinic: "" }))}
           sx={{ select: { color: "#1C1C1C" } }}
         >
-          {departments.map((dep) => (
-            <MenuItem key={dep.code} value={dep.name}>
-              {dep.name}
-            </MenuItem>
-          ))}
+          {departments.map(dep => <MenuItem key={dep.code} value={dep.name}>{dep.name}</MenuItem>)}
         </TextField>
       ),
     },
@@ -178,99 +203,30 @@ export default function AllLocations(): React.JSX.Element {
         <TextField
           select
           variant="standard"
-          value={
-            editingRow === row.index ? editRowData.clinic ?? "" : cell.getValue<string>()
-          }
+          value={editingRow === row.index ? editRowData.clinic ?? "" : cell.getValue<string>()}
           disabled={editingRow !== row.index}
-          onChange={(e) =>
-            setEditRowData((prev) => ({ ...prev, clinic: e.target.value }))
-          }
+          onChange={e => setEditRowData(prev => ({ ...prev, clinic: e.target.value }))}
           sx={{ select: { color: "#1C1C1C" } }}
         >
-          {(editingRow === row.index ? editRowData.clinics ?? [] : []).map((clinic) => (
-            <MenuItem key={clinic.code} value={clinic.name}>
-              {clinic.name}
-            </MenuItem>
+          {(editingRow === row.index ? editRowData.clinics ?? [] : row.original.clinics ?? []).map(c => (
+            <MenuItem key={c.code} value={c.name}>{c.name}</MenuItem>
           ))}
         </TextField>
       ),
     },
     {
-      header: "Counters",
-      accessorKey: "counters",
-      Cell: ({ cell, row }) => {
-        const rowIndex = row.index;
-        const counters =
-          editingRow === rowIndex ? editRowData.counters ?? [] : cell.getValue<string[]>();
-        const department =
-          editingRow === rowIndex
-            ? editRowData.department ?? "Radiology"
-            : data[rowIndex].department;
-        const color = departmentColors[department] ?? "#eee";
-
-        return (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-              {counters.map((c) => (
-                <Chip
-                  key={c}
-                  label={c}
-                  size="small"
-                  sx={{ backgroundColor: color }}
-                  onDelete={
-                    editingRow === rowIndex
-                      ? () =>
-                          setEditRowData((prev) => ({
-                            ...prev,
-                            counters: prev.counters?.filter((cc) => cc !== c),
-                          }))
-                      : undefined
-                  }
-                />
-              ))}
-            </Box>
-            {editingRow === rowIndex && (
-              <TextField
-                size="small"
-                variant="standard"
-                placeholder="Add counter"
-                value={newCounter}
-                onChange={(e) => setNewCounter(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === "Tab") {
-                    e.preventDefault();
-                    if (newCounter.trim() !== "") {
-                      setEditRowData((prev) => ({
-                        ...prev,
-                        counters: [...(prev.counters ?? []), newCounter.trim()],
-                      }));
-                      setNewCounter("");
-                    }
-                  }
-                }}
-                sx={{ width: 100 }}
-              />
-            )}
-          </Box>
-        );
-      },
-    },
-    {
       header: "Status",
       accessorKey: "status",
-      Cell: ({ cell }) => {
-        const status = cell.getValue<"Active" | "Inactive">();
-        return (
-          <Chip
-            label={status}
-            sx={{
-              backgroundColor: status === "Active" ? "#CFFFEF" : "#FFD6D6",
-              color: status === "Active" ? "#2FDCC7" : "#E53935",
-              fontWeight: 600,
-            }}
-          />
-        );
-      },
+      Cell: ({ row }) => (
+        <Chip
+          label={row.original.status}
+          sx={{
+            backgroundColor: row.original.status === "Active" ? "#CFFFEF" : "#FFD6D6",
+            color: row.original.status === "Active" ? "#2FDCC7" : "#E53935",
+            fontWeight: 600,
+          }}
+        />
+      ),
     },
     {
       header: "Actions",
@@ -282,36 +238,10 @@ export default function AllLocations(): React.JSX.Element {
         if (isEditing) {
           return (
             <Box sx={{ display: "flex", gap: 1 }}>
-              <IconButton
-                onClick={() => {
-                  setData((prev) =>
-                    prev.map((r, i) =>
-                      i === rowIndex ? ({ ...r, ...editRowData } as LocationRow) : r
-                    )
-                  );
-                  setEditingRow(null);
-                  setEditRowData({});
-                }}
-                sx={{ color: "#667085" }}
-              >
+              <IconButton onClick={() => saveRow(rowIndex)} sx={{ color: "#667085" }}>
                 <Save />
               </IconButton>
-
-              <IconButton
-                onClick={() => {
-                  if (
-                    editRowData.name === "" &&
-                    editRowData.department === "" &&
-                    editRowData.clinic === "" &&
-                    (editRowData.counters?.length ?? 0) === 0
-                  ) {
-                    setData((prev) => prev.slice(0, -1));
-                  }
-                  setEditingRow(null);
-                  setEditRowData({});
-                }}
-                sx={{ color: "#667085" }}
-              >
+              <IconButton onClick={() => { setEditingRow(null); setEditRowData({}); }} sx={{ color: "#667085" }}>
                 <Close />
               </IconButton>
             </Box>
@@ -321,29 +251,13 @@ export default function AllLocations(): React.JSX.Element {
         return (
           <Box sx={{ display: "flex", gap: 1 }}>
             <Tooltip title="Edit">
-              <IconButton
-                onClick={() => {
-                  setEditingRow(rowIndex);
-                  setEditRowData({ ...data[rowIndex], clinics: [] });
-                }}
-                sx={{ color: "#2FDCC7" }}
-              >
+              <IconButton onClick={() => { setEditingRow(rowIndex); setEditRowData({ ...data[rowIndex] }); }} sx={{ color: "#2FDCC7" }}>
                 <Edit />
               </IconButton>
             </Tooltip>
+
             <Tooltip title={status === "Active" ? "Deactivate" : "Activate"}>
-              <IconButton
-                onClick={() =>
-                  setData((prev) =>
-                    prev.map((r, i) =>
-                      i === rowIndex
-                        ? { ...r, status: r.status === "Active" ? "Inactive" : "Active" }
-                        : r
-                    )
-                  )
-                }
-                sx={{ color: "#2FDCC7" }}
-              >
+              <IconButton onClick={() => toggleStatus(rowIndex)} sx={{ color: "#2FDCC7" }}>
                 {status === "Active" ? <LocationOn /> : <LocationOff />}
               </IconButton>
             </Tooltip>
@@ -354,15 +268,7 @@ export default function AllLocations(): React.JSX.Element {
   ];
 
   return (
-    <Box
-      sx={{
-        margin: 0,
-        padding: 2,
-        backgroundColor: "#f4f4f4",
-        height: "670px",
-        borderRadius: 2,
-      }}
-    >
+    <Box sx={{ margin: 0, padding: 2, backgroundColor: "#f4f4f4", borderRadius: 2 }}>
       <MaterialReactTable
         columns={columns}
         data={data}
@@ -372,53 +278,50 @@ export default function AllLocations(): React.JSX.Element {
         enableHiding={false}
         enableSorting
         enablePagination
-        enableRowActions={false}
-        muiTablePaperProps={{
-          sx: { borderRadius: 3, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" },
-        }}
-         renderTopToolbarCustomActions={() => (
-                    <Box
-                            sx={{
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    padding: 1,
-                    alignItems: 'center',
-                    gap: 0.5,
-                    height: '100%',      // fill parent's height
-                    flexGrow: 1,         // grow to fill available horizontal space
-                  }}
-                          >
-                  <Tooltip title="Add Row">
-                    <IconButton
-                    onClick={() => {
+        initialState={{ pagination: { pageSize: 10, pageIndex: 0 } }}
+        muiTablePaperProps={{ sx: { borderRadius: 3, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" } }}
+        renderTopToolbarCustomActions={() => (
+          <Box
+                              sx={{
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                      padding: 1,
+                      alignItems: 'center',
+                      gap: 0.5,
+                      height: '100%',      // fill parent's height
+                      flexGrow: 1,         // grow to fill available horizontal space
+                    }}
+                            >
+            <Tooltip title="Add Row">
+              <IconButton
+                onClick={() => {
                   const newRow: LocationRow = {
-                    name: "",
-                    department: "",
-                    clinic: "",
-                    counters: [],
-                    status: "Active",
-                    clinics: [],
+                    name: '',
+                    department: '',
+                    clinic: '',
+                    status: 'Active',
+                    clinics: data[0]?.clinics ?? [],
+                    locations: [],
                   };
-                  setData((prev) => [...prev, newRow]);
+                  setData(prev => [...prev, newRow]);
                   setEditingRow(data.length);
                   setEditRowData(newRow);
                 }}
-                        sx={{
-                          borderRadius: 1,
-                          width: "1em",
-                          height: "1em",
-                       
-                       
-                          backgroundColor: '#667085',
-                          color: '#fff',
-                          '&:hover': { backgroundColor: '#50566a' },
-                        }}
-                    >
-                      <Add />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-              )}
+  sx={{
+                    borderRadius: 1,
+                    width: "1em",
+                    height: "1em",
+                 
+                 
+                    backgroundColor: '#667085',
+                    color: '#fff',
+                    '&:hover': { backgroundColor: '#50566a' },
+                  }}              >
+                <Add />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
       />
     </Box>
   );
