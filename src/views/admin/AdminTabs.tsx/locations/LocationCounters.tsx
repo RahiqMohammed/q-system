@@ -4,11 +4,21 @@ import { Box, Chip, IconButton, TextField, Tooltip } from "@mui/material";
 import { Edit, Save, Close } from "@mui/icons-material";
 import axios from "axios";
 
+interface Location {
+  locationId?: number;
+  locationName: string;
+  locationNameAr: string;
+  pathId: number;
+  activeYN: string;
+  gender: string;
+}
+
 interface LocationRow {
+  pathId: number;
   name: string;
   department: string;
   clinic: string;
-  counters: string[];
+  counters: Location[];
   clinics?: { name: string; code: number }[];
 }
 
@@ -20,7 +30,6 @@ export default function LocationCounters(): React.JSX.Element {
 
   const token = localStorage.getItem("token");
 
-  // Fetch paths, departments, and clinics
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -53,10 +62,18 @@ export default function LocationCounters(): React.JSX.Element {
           const clinic = clinics.find((c) => c.code === path.clinic);
 
           return {
+            pathId: path.pathId,
             name: path.pathName,
             department: dept ? dept.name : "—",
             clinic: clinic ? clinic.name : "—",
-            counters: path.locations.map((l: any) => l.locationName),
+            counters: path.locations.map((l: any) => ({
+              locationId: l.locationId,
+              locationName: l.locationName,
+              locationNameAr: l.locationNameAr,
+              pathId: path.pathId,
+              activeYN: l.activeYN,
+              gender: l.gender,
+            })),
             clinics,
           };
         });
@@ -74,30 +91,19 @@ export default function LocationCounters(): React.JSX.Element {
     if (!editRowData.counters?.length) return;
 
     try {
-      // Loop through counters to add new ones via API
-      for (const counter of editRowData.counters) {
-        if (!data[rowIndex].counters.includes(counter)) {
-          // Replace with real pathId if available, here we assume rowIndex + 1 for demo
-          await axios.post(
-            "http://localhost:8099/qsys/api/masters/master-room/save-room-by-path",
-            {
-              locationName: counter,
-              locationNameAr: counter,
-              pathId: rowIndex + 1, // adjust to real pathId
-              activeYN: "Y",
-              gender: "A",
-            },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-        }
-      }
+      // Send the updated counters to the API
+      await axios.post(
+        "http://localhost:8099/qsys/api/masters/master-room/update-room-by-path",
+        editRowData.counters,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-      // Update table locally
       setData((prev) =>
         prev.map((r, i) =>
           i === rowIndex ? { ...r, counters: editRowData.counters ?? r.counters } : r
         )
       );
+
       setEditingRow(null);
       setEditRowData({});
       setNewCounter("");
@@ -107,31 +113,24 @@ export default function LocationCounters(): React.JSX.Element {
   };
 
   const columns: MRT_ColumnDef<LocationRow>[] = [
-    {
-      header: "Name",
-      accessorKey: "name",
-    },
-    {
-      header: "Department",
-      accessorKey: "department",
-    },
-    {
-      header: "Clinic",
-      accessorKey: "clinic",
-    },
+    { header: "Name", accessorKey: "name" },
+    { header: "Department", accessorKey: "department" },
+    { header: "Clinic", accessorKey: "clinic" },
     {
       header: "Counters",
       accessorKey: "counters",
-      Cell: ({ cell, row }) => {
+      Cell: ({ row }) => {
         const rowIndex = row.index;
-        const counters = editingRow === rowIndex ? editRowData.counters ?? [] : cell.getValue<string[]>();
+        const counters =
+          editingRow === rowIndex ? editRowData.counters ?? [] : row.original.counters;
+
         return (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-              {counters.map((c) => (
+              {counters.map((c, idx) => (
                 <Chip
-                  key={c}
-                  label={c}
+                  key={c.locationId ?? idx}
+                  label={c.locationName}
                   size="small"
                   onDelete={
                     editingRow === rowIndex
@@ -158,7 +157,16 @@ export default function LocationCounters(): React.JSX.Element {
                     if (newCounter.trim() !== "") {
                       setEditRowData((prev) => ({
                         ...prev,
-                        counters: [...(prev.counters ?? []), newCounter.trim()],
+                        counters: [
+                          ...(prev.counters ?? []),
+                          {
+                            locationName: newCounter.trim(),
+                            locationNameAr: newCounter.trim(),
+                            pathId: row.original.pathId,
+                            activeYN: "Y",
+                            gender: "A",
+                          },
+                        ],
                       }));
                       setNewCounter("");
                     }
@@ -204,7 +212,7 @@ export default function LocationCounters(): React.JSX.Element {
                   setEditingRow(rowIndex);
                   setEditRowData({ ...data[rowIndex] });
                 }}
-                  sx={{ color: '#2FDCC7' }}
+                sx={{ color: "#2FDCC7" }}
               >
                 <Edit />
               </IconButton>
@@ -216,7 +224,18 @@ export default function LocationCounters(): React.JSX.Element {
   ];
 
   return (
-    <Box sx={{ margin: 0, padding: 2, backgroundColor: "#f4f4f4", height: "670px", borderRadius: 2 }}>
+    <Box
+      sx={{
+        width: "100%",
+        minHeight: "100vh",
+        padding: 2,
+        backgroundColor: "#f4f4f4",
+        borderRadius: 2,
+        boxSizing: "border-box",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       <MaterialReactTable
         columns={columns}
         data={data}
@@ -228,7 +247,12 @@ export default function LocationCounters(): React.JSX.Element {
         enablePagination
         enableRowActions={false}
         muiTablePaperProps={{
-          sx: { borderRadius: 3, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" },
+          sx: {
+            borderRadius: 3,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            width: "100%",
+            flex: 1,
+          },
         }}
       />
     </Box>
