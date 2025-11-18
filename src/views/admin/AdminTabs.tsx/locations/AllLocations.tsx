@@ -41,7 +41,6 @@ interface LocationRow {
   deptCode?: number;
   clinicCode?: number;
   pathId?: number;
-  locations?: Location[];
 }
 
 export default function AllLocations(): React.JSX.Element {
@@ -49,7 +48,6 @@ export default function AllLocations(): React.JSX.Element {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [editRowData, setEditRowData] = useState<Partial<LocationRow>>({});
-  const tableRef = useRef<any>(null);
   const token = localStorage.getItem("token");
 
   useEffect(() => {
@@ -77,7 +75,6 @@ export default function AllLocations(): React.JSX.Element {
             deptCode: path.dept,
             clinicCode: path.clinic,
             pathId: path.pathId,
-            locations: path.locations ?? [],
           };
         });
 
@@ -98,27 +95,10 @@ export default function AllLocations(): React.JSX.Element {
     try {
       const dept = departments.find(d => d.name === row.department);
       const clinic = row.clinics?.find(c => c.name === row.clinic);
+      const pathId = row.pathId;
 
-      let pathId = row.pathId;
+      if (!pathId) return; // only update existing rows
 
-      if (!pathId) {
-        // New row: save first to get pathId
-        const res = await axios.post(
-          "http://localhost:8099/qsys/api/masters/master-path/save",
-          {
-            pathName: row.name,
-            pathNameAr: row.name,
-            dept: dept?.code,
-            clinic: clinic?.code,
-            activeYn: "Y",
-            locations: row.locations ?? [],
-          },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        pathId = res.data.result?.pathId;
-      }
-
-      // Update entire row
       await axios.post(
         "http://localhost:8099/qsys/api/masters/master-path/update",
         {
@@ -128,24 +108,14 @@ export default function AllLocations(): React.JSX.Element {
           dept: dept?.code,
           clinic: clinic?.code,
           activeYn: row.status === "Active" ? "Y" : "N",
-          locations: row.locations ?? [],
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const updatedRow: LocationRow = {
-        ...row,
-        deptCode: dept?.code,
-        clinicCode: clinic?.code,
-        pathId,
-      } as LocationRow;
-
       setData(prev => {
         const newData = [...prev];
         if (editingRow !== null) {
-          newData[editingRow] = updatedRow;
-        } else {
-          newData.push(updatedRow);
+          newData[editingRow] = { ...prev[editingRow], ...row } as LocationRow;
         }
         return newData;
       });
@@ -163,7 +133,7 @@ export default function AllLocations(): React.JSX.Element {
         i === rowIndex ? { ...r, status: r.status === "Active" ? "Inactive" : "Active" } : r
       )
     );
-    saveRow(rowIndex); // call API to update entire row
+    saveRow(rowIndex); // update via API
   };
 
   const columns: MRT_ColumnDef<LocationRow>[] = [
@@ -189,7 +159,7 @@ export default function AllLocations(): React.JSX.Element {
           variant="standard"
           value={editingRow === row.index ? editRowData.department ?? "" : cell.getValue<string>()}
           disabled={editingRow !== row.index}
-          onChange={e => setEditRowData(prev => ({ ...prev, department: e.target.value, clinic: "" }))}
+          onChange={e => setEditRowData(prev => ({ ...prev, department: e.target.value }))}
           sx={{ select: { color: "#1C1C1C" } }}
         >
           {departments.map(dep => <MenuItem key={dep.code} value={dep.name}>{dep.name}</MenuItem>)}
@@ -280,7 +250,7 @@ export default function AllLocations(): React.JSX.Element {
         enablePagination
         initialState={{ pagination: { pageSize: 10, pageIndex: 0 } }}
         muiTablePaperProps={{ sx: { borderRadius: 3, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" } }}
-        renderTopToolbarCustomActions={() => (
+           renderTopToolbarCustomActions={() => (
           <Box
                               sx={{
                       display: 'flex',
@@ -301,7 +271,6 @@ export default function AllLocations(): React.JSX.Element {
                     clinic: '',
                     status: 'Active',
                     clinics: data[0]?.clinics ?? [],
-                    locations: [],
                   };
                   setData(prev => [...prev, newRow]);
                   setEditingRow(data.length);
@@ -323,6 +292,7 @@ export default function AllLocations(): React.JSX.Element {
           </Box>
         )}
       />
+      
     </Box>
   );
 }
