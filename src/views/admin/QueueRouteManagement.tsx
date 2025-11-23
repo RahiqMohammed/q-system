@@ -11,7 +11,6 @@ import RouteIcon from '@mui/icons-material/Route';
 import { useState } from 'react';
 import AllLocations from './AdminTabs.tsx/locations/AllLocations';
 import { Typography } from '@mui/material';
-import LocationPrefix from './AdminTabs.tsx/locations/LocationPrefix';
 import FirstLocationInPath from './AdminTabs.tsx/locations/FirstLocationInPath';
 import LocationCounters from './AdminTabs.tsx/locations/LocationCounters';
 import PathsDashboard from './AdminTabs.tsx/Paths/PathsDashboard';
@@ -196,7 +195,7 @@ const handleInnerChange = (event: React.SyntheticEvent, newValue: number) => {
         marginBottom: 0
       }}
     >
-      {['All Locations', 'Location Counters', 'Location Prefix', 'First Location in Path'].map((label, i) => (
+      {['All Locations', 'Location Counters', 'Paths'].map((label, i) => (
         <Box
           key={i}
           onClick={() => setInnerValue(i)}
@@ -226,8 +225,7 @@ const handleInnerChange = (event: React.SyntheticEvent, newValue: number) => {
   {/* Panels for inner tabs */}
   {innerValue === 0 && <AllLocations />}
   {innerValue === 1 && <LocationCounters />}
-  {innerValue === 2 && <LocationPrefix />}
-   {innerValue === 3 && <FirstLocationInPath />}
+   {innerValue === 2 && <FirstLocationInPath />}
 </CustomTabPanel>
 
       <CustomTabPanel value={value} index={1}>

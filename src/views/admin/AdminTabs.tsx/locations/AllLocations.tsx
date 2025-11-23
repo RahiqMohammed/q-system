@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import {
   MaterialReactTable,
   type MRT_ColumnDef,
@@ -22,18 +22,12 @@ interface Department {
 interface Clinic {
   name: string;
   code: number;
-}
-
-interface Location {
-  locationId?: number;
-  locationName: string;
-  locationNameAr: string;
-  activeYN: string;
-  gender: string;
+  deptCode: number;
 }
 
 interface LocationRow {
-  name: string;
+  pathName: string;
+  pathNameAr?: string;
   department: string;
   clinic: string;
   status: "Active" | "Inactive";
@@ -46,6 +40,7 @@ interface LocationRow {
 export default function AllLocations(): React.JSX.Element {
   const [data, setData] = useState<LocationRow[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [clinics, setClinics] = useState<Clinic[]>([]);
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [editRowData, setEditRowData] = useState<Partial<LocationRow>>({});
   const token = localStorage.getItem("token");
@@ -53,33 +48,48 @@ export default function AllLocations(): React.JSX.Element {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        if (!token) return;
+        const headers = { Authorization: `Bearer ${token}` };
+
         const [deptRes, clinicRes, pathRes] = await Promise.all([
-          axios.get("http://localhost:8099/qsys/api/masters/master-dept-list", { headers: { Authorization: `Bearer ${token}` } }),
-          axios.get("http://localhost:8099/qsys/api/masters/master-clinic-list", { headers: { Authorization: `Bearer ${token}` } }),
-          axios.get("http://localhost:8099/qsys/api/masters/master-path/get", { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get("http://localhost:8099/qsys/api/masters/master-dept-list", { headers }),
+          axios.get("http://localhost:8099/qsys/api/masters/master-clinic-list", { headers }),
+          axios
+            .post("http://localhost:8099/qsys/api/masters/master-path/get", { headers })
+            .catch(() => ({ data: { result: [] } })),
         ]);
 
-        const departments: Department[] = deptRes.data.result.map((d: any) => ({ name: d.deptName, code: d.deptCode }));
-        const clinics: Clinic[] = clinicRes.data.result.map((c: any) => ({ name: c.clinicName, code: c.clinicCode }));
+        const deptList: Department[] = (deptRes.data?.result || []).map((d: any) => ({
+          name: d.deptName,
+          code: d.deptCode,
+        }));
 
-        const paths = pathRes.data.result;
+        const clinicList: Clinic[] = (clinicRes.data?.result || []).map((c: any) => ({
+          name: c.clinicName,
+          code: c.clinicCode,
+          deptCode: c.deptCode, // important for filtering
+        }));
+
+        const paths = pathRes.data?.result || [];
         const mappedData: LocationRow[] = paths.map((path: any) => {
-          const dept = departments.find(d => d.code === path.dept);
-          const clinic = clinics.find(c => c.code === path.clinic);
+          const dept = deptList.find(d => d.code === path.dept);
+          const clinic = clinicList.find(c => c.code === path.clinic);
           return {
-            name: path.pathName,
-            department: dept ? dept.name : "—",
-            clinic: clinic ? clinic.name : "—",
+            pathName: path.pathName ?? "",
+            pathNameAr: path.pathNameAr ?? "",
+            department: dept ? dept.name : "",
+            clinic: clinic ? clinic.name : "",
             status: path.activeYn === "Y" ? "Active" : "Inactive",
-            clinics,
+            clinics: clinicList,
             deptCode: path.dept,
             clinicCode: path.clinic,
             pathId: path.pathId,
-          };
+          } as LocationRow;
         });
 
         setData(mappedData);
-        setDepartments(departments);
+        setDepartments(deptList);
+        setClinics(clinicList);
       } catch (err) {
         console.error(err);
       }
@@ -88,65 +98,91 @@ export default function AllLocations(): React.JSX.Element {
     fetchData();
   }, [token]);
 
-  const saveRow = async (rowIndex: number) => {
-    const row = editingRow !== null ? editRowData : data[rowIndex];
-    if (!row?.name || !row?.department || !row?.clinic) return;
+  const saveRow = async (rowIndex: number, rowData?: LocationRow) => {
+    const row = rowData ?? (editingRow !== null ? (editRowData as LocationRow) : data[rowIndex]);
+    if (!row) return;
+    if (!row.pathName || !row.department || !row.clinic) return;
 
     try {
+      if (!token) return;
+      const headers = { Authorization: `Bearer ${token}` };
+
       const dept = departments.find(d => d.name === row.department);
-      const clinic = row.clinics?.find(c => c.name === row.clinic);
-      const pathId = row.pathId;
+      const clinic = clinics.find(c => c.name === row.clinic);
 
-      if (!pathId) return; // only update existing rows
+      if (!dept?.code || !clinic?.code) return;
 
-      await axios.post(
-        "http://localhost:8099/qsys/api/masters/master-path/update",
-        {
-          pathId,
-          pathName: row.name,
-          pathNameAr: row.name,
-          dept: dept?.code,
-          clinic: clinic?.code,
-          activeYn: row.status === "Active" ? "Y" : "N",
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const payload: any = {
+        pathName: row.pathName,
+        pathNameAr: row.pathNameAr ?? row.pathName,
+        dept: dept.code,
+        clinic: clinic.code,
+        activeYn: row.status === "Active" ? "Y" : "N",
+      };
+      if (row.pathId && row.pathId > 0) payload.pathId = row.pathId;
+
+      if (row.pathId && row.pathId > 0) {
+        await axios.post(
+          "http://localhost:8099/qsys/api/masters/master-path/update",
+          payload,
+          { headers }
+        );
+      } else {
+        const createRes = await axios.post(
+          "http://localhost:8099/qsys/api/masters/master-path/save",
+          payload,
+          { headers }
+        );
+        const newId = createRes?.data?.result?.pathId;
+        if (newId) payload.pathId = newId;
+      }
 
       setData(prev => {
         const newData = [...prev];
-        if (editingRow !== null) {
-          newData[editingRow] = { ...prev[editingRow], ...row } as LocationRow;
-        }
+        newData[rowIndex] = { ...newData[rowIndex], ...row, pathId: payload.pathId ?? row.pathId } as LocationRow;
         return newData;
       });
 
       setEditingRow(null);
       setEditRowData({});
     } catch (err) {
-      console.error("Failed to save row", err);
+      console.error(err);
     }
   };
 
-  const toggleStatus = (rowIndex: number) => {
-    setData(prev =>
-      prev.map((r, i) =>
-        i === rowIndex ? { ...r, status: r.status === "Active" ? "Inactive" : "Active" } : r
-      )
-    );
-    saveRow(rowIndex); // update via API
+  const toggleStatus = async (rowIndex: number) => {
+    const current = data[rowIndex];
+    if (!current) return;
+
+    const newStatus: "Active" | "Inactive" = current.status === "Active" ? "Inactive" : "Active";
+    const updatedRow: LocationRow = { ...current, status: newStatus };
+
+    setData(prev => prev.map((r, i) => (i === rowIndex ? updatedRow : r)));
+    saveRow(rowIndex, updatedRow);
   };
 
   const columns: MRT_ColumnDef<LocationRow>[] = [
     {
-      header: "Name",
-      accessorKey: "name",
+      header: "English Name",
+      accessorKey: "pathName",
       Cell: ({ cell, row }) => (
         <TextField
           variant="standard"
-          value={editingRow === row.index ? editRowData.name ?? "" : cell.getValue<string>()}
+          value={editingRow === row.index ? editRowData.pathName ?? "" : cell.getValue<string>()}
           disabled={editingRow !== row.index}
-          onChange={e => setEditRowData(prev => ({ ...prev, name: e.target.value }))}
-          sx={{ input: { color: "#1C1C1C" } }}
+          onChange={e => setEditRowData(prev => ({ ...prev, pathName: e.target.value }))}
+        />
+      ),
+    },
+    {
+      header: "Arabic Name",
+      accessorKey: "pathNameAr",
+      Cell: ({ cell, row }) => (
+        <TextField
+          variant="standard"
+          value={editingRow === row.index ? editRowData.pathNameAr ?? "" : cell.getValue<string>()}
+          disabled={editingRow !== row.index}
+          onChange={e => setEditRowData(prev => ({ ...prev, pathNameAr: e.target.value }))}
         />
       ),
     },
@@ -159,30 +195,37 @@ export default function AllLocations(): React.JSX.Element {
           variant="standard"
           value={editingRow === row.index ? editRowData.department ?? "" : cell.getValue<string>()}
           disabled={editingRow !== row.index}
-          onChange={e => setEditRowData(prev => ({ ...prev, department: e.target.value }))}
-          sx={{ select: { color: "#1C1C1C" } }}
+          onChange={e => setEditRowData(prev => ({ ...prev, department: e.target.value, clinic: "" }))}
         >
-          {departments.map(dep => <MenuItem key={dep.code} value={dep.name}>{dep.name}</MenuItem>)}
+          {departments.map(dep => (
+            <MenuItem key={dep.code} value={dep.name}>{dep.name}</MenuItem>
+          ))}
         </TextField>
       ),
     },
     {
       header: "Clinic",
       accessorKey: "clinic",
-      Cell: ({ cell, row }) => (
-        <TextField
-          select
-          variant="standard"
-          value={editingRow === row.index ? editRowData.clinic ?? "" : cell.getValue<string>()}
-          disabled={editingRow !== row.index}
-          onChange={e => setEditRowData(prev => ({ ...prev, clinic: e.target.value }))}
-          sx={{ select: { color: "#1C1C1C" } }}
-        >
-          {(editingRow === row.index ? editRowData.clinics ?? [] : row.original.clinics ?? []).map(c => (
-            <MenuItem key={c.code} value={c.name}>{c.name}</MenuItem>
-          ))}
-        </TextField>
-      ),
+      Cell: ({ row }) => {
+        const isEditing = editingRow === row.index;
+        const selectedDeptName = isEditing ? editRowData.department : row.original.department;
+        const selectedDeptCode = departments.find(d => d.name === selectedDeptName)?.code;
+        const filteredClinics = selectedDeptCode ? clinics.filter(c => c.deptCode === selectedDeptCode) : clinics;
+
+        return (
+          <TextField
+            select
+            variant="standard"
+            value={isEditing ? editRowData.clinic ?? "" : row.original.clinic}
+            disabled={!isEditing}
+            onChange={e => setEditRowData(prev => ({ ...prev, clinic: e.target.value }))}
+          >
+            {filteredClinics.map(c => (
+              <MenuItem key={c.code} value={c.name}>{c.name}</MenuItem>
+            ))}
+          </TextField>
+        );
+      },
     },
     {
       header: "Status",
@@ -203,7 +246,7 @@ export default function AllLocations(): React.JSX.Element {
       Cell: ({ row }) => {
         const rowIndex = row.index;
         const isEditing = editingRow === rowIndex;
-        const status = data[rowIndex].status;
+        const status = data[rowIndex]?.status ?? "Inactive";
 
         if (isEditing) {
           return (
@@ -225,7 +268,6 @@ export default function AllLocations(): React.JSX.Element {
                 <Edit />
               </IconButton>
             </Tooltip>
-
             <Tooltip title={status === "Active" ? "Deactivate" : "Activate"}>
               <IconButton onClick={() => toggleStatus(rowIndex)} sx={{ color: "#2FDCC7" }}>
                 {status === "Active" ? <LocationOn /> : <LocationOff />}
@@ -250,49 +292,50 @@ export default function AllLocations(): React.JSX.Element {
         enablePagination
         initialState={{ pagination: { pageSize: 10, pageIndex: 0 } }}
         muiTablePaperProps={{ sx: { borderRadius: 3, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" } }}
-           renderTopToolbarCustomActions={() => (
-          <Box
-                              sx={{
-                      display: 'flex',
-                      justifyContent: 'flex-end',
-                      padding: 1,
-                      alignItems: 'center',
-                      gap: 0.5,
-                      height: '100%',      // fill parent's height
-                      flexGrow: 1,         // grow to fill available horizontal space
-                    }}
-                            >
-            <Tooltip title="Add Row">
+        renderTopToolbarCustomActions={() => (
+  <Box
+                                        sx={{
+                                display: 'flex',
+                                justifyContent: 'flex-end',
+                                padding: 1,
+                                alignItems: 'center',
+                                gap: 0.5,
+                                height: '100%',      // fill parent's height
+                                flexGrow: 1,         // grow to fill available horizontal space
+                              }}
+                                      >            <Tooltip title="Add Row">
               <IconButton
                 onClick={() => {
                   const newRow: LocationRow = {
-                    name: '',
-                    department: '',
-                    clinic: '',
-                    status: 'Active',
-                    clinics: data[0]?.clinics ?? [],
+                    pathName: "",
+                    pathNameAr: "",
+                    department: departments[0]?.name || "",
+                    clinic: "",
+                    status: "Active",
+                    clinics: clinics,
                   };
-                  setData(prev => [...prev, newRow]);
-                  setEditingRow(data.length);
-                  setEditRowData(newRow);
+                  setData(prev => {
+                    const newData = [...prev, newRow];
+                    setEditingRow(newData.length - 1);
+                    setEditRowData(newRow);
+                    return newData;
+                  });
                 }}
-  sx={{
-                    borderRadius: 1,
-                    width: "1em",
-                    height: "1em",
-                 
-                 
-                    backgroundColor: '#667085',
-                    color: '#fff',
-                    '&:hover': { backgroundColor: '#50566a' },
-                  }}              >
+                sx={{
+                  borderRadius: 1,
+                  width: "1em",
+                  height: "1em",
+                  backgroundColor: "#667085",
+                  color: "#fff",
+                  "&:hover": { backgroundColor: "#50566a" },
+                }}
+              >
                 <Add />
               </IconButton>
             </Tooltip>
           </Box>
         )}
       />
-      
     </Box>
   );
 }
