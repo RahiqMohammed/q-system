@@ -52,10 +52,10 @@ export default function AllLocations(): React.JSX.Element {
         const headers = { Authorization: `Bearer ${token}` };
 
         const [deptRes, clinicRes, pathRes] = await Promise.all([
-          axios.get("http://localhost:8099/qsys/api/masters/master-dept-list", { headers }),
-          axios.get("http://localhost:8099/qsys/api/masters/master-clinic-list", { headers }),
+          axios.get("http://10.99.9.20:8555/qsys/api/masters/master-dept-list", { headers }),
+          axios.get("http://10.99.9.20:8555/qsys/api/masters/master-clinic-list", { headers }),
           axios
-            .post("http://localhost:8099/qsys/api/masters/master-path/get", { headers })
+            .post("http://10.99.9.20:8555/qsys/api/masters/master-path/get", { headers })
             .catch(() => ({ data: { result: [] } })),
         ]);
 
@@ -123,13 +123,13 @@ export default function AllLocations(): React.JSX.Element {
 
       if (row.pathId && row.pathId > 0) {
         await axios.post(
-          "http://localhost:8099/qsys/api/masters/master-path/update",
+          "http://10.99.9.20:8555/qsys/api/masters/master-path/update",
           payload,
           { headers }
         );
       } else {
         const createRes = await axios.post(
-          "http://localhost:8099/qsys/api/masters/master-path/save",
+          "http://10.99.9.20:8555/qsys/api/masters/master-path/save",
           payload,
           { headers }
         );

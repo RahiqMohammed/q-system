@@ -49,9 +49,9 @@ export default function AllLocations(): React.JSX.Element {
       try {
         // fetch departments, clinics, and paths
         const [deptRes, clinicRes, pathRes] = await Promise.all([
-          axios.get("http://localhost:8099/qsys/api/masters/master-dept-list", { headers: { Authorization: `Bearer ${token}` } }),
-          axios.get("http://localhost:8099/qsys/api/masters/master-clinic-list", { headers: { Authorization: `Bearer ${token}` } }),
-          axios.get("http://localhost:8099/qsys/api/masters/master-path/get", { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get("http://10.99.9.20:8555/qsys/api/masters/master-dept-list", { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get("http://10.99.9.20:8555/qsys/api/masters/master-clinic-list", { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get("http://10.99.9.20:8555/qsys/api/masters/master-path/get", { headers: { Authorization: `Bearer ${token}` } }),
         ]);
 
         const depts: Department[] = deptRes.data.result.map((d: any) => ({ name: d.deptName, code: d.deptCode }));
@@ -95,7 +95,7 @@ export default function AllLocations(): React.JSX.Element {
       if (!row.pathId) return;
 
       await axios.post(
-        "http://localhost:8099/qsys/api/masters/master-path/update",
+        "http://10.99.9.20:8555/qsys/api/masters/master-path/update",
         {
           pathId: row.pathId,
           pathName: row.name,

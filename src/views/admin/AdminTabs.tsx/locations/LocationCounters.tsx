@@ -4,6 +4,17 @@ import { Box, Chip, IconButton, TextField, Tooltip } from "@mui/material";
 import { Edit, Save, Close } from "@mui/icons-material";
 import axios from "axios";
 
+interface Department {
+  name: string;
+  code: number;
+}
+
+interface Clinic {
+  name: string;
+  code: number;
+  deptCode: number;
+}
+
 interface Location {
   locationId?: number;
   locationName: string;
@@ -19,11 +30,13 @@ interface LocationRow {
   department: string;
   clinic: string;
   counters: Location[];
-  clinics?: { name: string; code: number }[];
+  clinics?: Clinic[];
 }
 
 export default function LocationCounters(): React.JSX.Element {
   const [data, setData] = useState<LocationRow[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [clinics, setClinics] = useState<Clinic[]>([]);
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [editRowData, setEditRowData] = useState<Partial<LocationRow>>({});
   const [newCounter, setNewCounter] = useState("");
@@ -33,51 +46,50 @@ export default function LocationCounters(): React.JSX.Element {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        if (!token) return;
+
+        const headers = { Authorization: `Bearer ${token}` };
+
         const [deptRes, clinicRes, pathRes] = await Promise.all([
-          axios.get("http://localhost:8099/qsys/api/masters/master-dept-list", {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          axios.get("http://localhost:8099/qsys/api/masters/master-clinic-list", {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          axios.get("http://localhost:8099/qsys/api/masters/master-path/get", {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+          axios.get("http://10.99.9.20:8555/qsys/api/masters/master-dept-list", { headers }),
+          axios.get("http://10.99.9.20:8555/qsys/api/masters/master-clinic-list", { headers }),
+          axios.post("http://10.99.9.20:8555/qsys/api/masters/master-path/get", { headers }),
         ]);
 
-        const departments = deptRes.data.result.map((d: any) => ({
+        const deptList: Department[] = (deptRes.data?.result || []).map((d: any) => ({
           name: d.deptName,
           code: d.deptCode,
         }));
-
-        const clinics = clinicRes.data.result.map((c: any) => ({
+        const clinicList: Clinic[] = (clinicRes.data?.result || []).map((c: any) => ({
           name: c.clinicName,
           code: c.clinicCode,
+          deptCode: c.deptCode,
         }));
 
-        const paths = pathRes.data.result;
-
+        const paths = pathRes.data?.result || [];
         const mappedData: LocationRow[] = paths.map((path: any) => {
-          const dept = departments.find((d) => d.code === path.dept);
-          const clinic = clinics.find((c) => c.code === path.clinic);
+          const dept = deptList.find((d) => d.code === path.dept);
+          const clinic = clinicList.find((c) => c.code === path.clinic);
 
           return {
             pathId: path.pathId,
-            name: path.pathName,
+            name: path.pathName ?? "",
             department: dept ? dept.name : "—",
             clinic: clinic ? clinic.name : "—",
-            counters: path.locations.map((l: any) => ({
+            counters: path.locations?.map((l: any) => ({
               locationId: l.locationId,
               locationName: l.locationName,
               locationNameAr: l.locationNameAr,
               pathId: path.pathId,
               activeYN: l.activeYN,
               gender: l.gender,
-            })),
-            clinics,
+            })) || [],
+            clinics: clinicList,
           };
         });
 
+        setDepartments(deptList);
+        setClinics(clinicList);
         setData(mappedData);
       } catch (err) {
         console.error(err);
@@ -91,9 +103,8 @@ export default function LocationCounters(): React.JSX.Element {
     if (!editRowData.counters?.length) return;
 
     try {
-      // Send the updated counters to the API
       await axios.post(
-        "http://localhost:8099/qsys/api/masters/master-room/update-room-by-path",
+        "http://10.99.9.20:8555/qsys/api/masters/master-room/update-room-by-path",
         editRowData.counters,
         { headers: { Authorization: `Bearer ${token}` } }
       );
